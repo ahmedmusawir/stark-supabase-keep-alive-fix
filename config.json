@@ -1,0 +1,14 @@
+[
+  {
+    "name": "Stark Base Free",
+    "supabase_url": "https://jmzwhgnyunwssamrqyhp.supabase.co",
+    "supabase_key_env": "SUPABASE_KEY_1",
+    "table_name": "keepalive"
+  },
+  {
+    "name": "Nextjs Starter v1 - RBAC & RLS",
+    "supabase_url": "https://ihgcsrypblqkwommrkgj.supabase.co",
+    "supabase_key_env": "SUPABASE_KEY_2",
+    "table_name": "keepalive"
+  }
+]
