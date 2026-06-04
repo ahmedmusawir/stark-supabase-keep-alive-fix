@@ -1,255 +1,221 @@
-# Supabase Inactive Fix
+# SUPABASE FLEET KEEPALIVE PATTERN
 
-![GitHub stars](https://img.shields.io/github/stars/travisvn/supabase-inactive-fix?style=social)
-![GitHub forks](https://img.shields.io/github/forks/travisvn/supabase-inactive-fix?style=social)
-![GitHub repo size](https://img.shields.io/github/repo-size/travisvn/supabase-inactive-fix)
-![GitHub top language](https://img.shields.io/github/languages/top/travisvn/supabase-inactive-fix)
-![GitHub last commit](https://img.shields.io/github/last-commit/travisvn/supabase-inactive-fix?color=red)
+**Project:** Stark Industries App Factory
+**Version:** 1.0
+**Born from:** Cyber Pharma session, June 2026 — built, proven, then documented
+**Status:** Evergreen Factory artifact — reusable across ALL projects with free-tier Supabase
+**Proven on:** Two live free-tier projects (Nextjs Starter v1 - RBAC & RLS, Stark_Base_Free)
 
-This project helps prevent Supabase projects from pausing due to inactivity by periodically inserting, monitoring, and deleting entries in the specified tables of multiple Supabase databases. The project uses a configuration file (`config.json`) to define multiple databases and automate the keep-alive actions.
+---
 
-## Features ⭐️
+## 0. What This Is
 
-- Insert a random string into a specified table for each Supabase database.
-- Monitor the number of entries in the table.
-- Automatically delete entries if the table contains more than a specified number of records.
-- Log successes and failures, and generate a detailed status report.
+A reusable pattern for keeping multiple free-tier Supabase projects alive — preventing the 7-day inactivity pause — using one forked GitHub repo running a scheduled write operation against each project.
 
-## Setup 🚀
+**One fork. One config. Your whole free-tier fleet kept alive.**
 
-> **💡 Quick Start:** For the easiest setup, skip to [Deployment Options](#deployment-options-) and use **GitHub Actions** (serverless, no installation required).
+This document exists because we built this once through trial and error and almost lost the knowledge. Next time a project needs keepalive, follow this doc — don't re-derive it.
 
-### Local Development Setup
+---
 
-1. Clone the repository:
+## 1. The Core Problem And Why The Obvious Fix Fails
 
-    ```bash
-    git clone https://github.com/travisvn/supabase-inactive-fix.git
-    cd supabase-inactive-fix
-    ```
-    
-2. Install the required dependencies:
-    
-    ```bash
-    python -m venv venv
-    source venv/bin/activate  # On Windows use `venv\Scripts\activate`
-    pip install -r requirements.txt
-    ```
-    
-3. Create a `config.json` file in the project root. This file defines your Supabase databases. 
+**The problem:** Supabase pauses free-tier projects after 7 days of inactivity. A paused project won't respond until manually un-paused from the dashboard — which breaks any deployed app pointing at it.
 
-   
-    Example configuration:
-    
-    ```json
-    [
-      {
-        "name": "Database1",
-        "supabase_url": "https://your-supabase-url-1.supabase.co",
-        "supabase_key_env": "SUPABASE_KEY_1",  // Use environment variable for the key
-        "table_name": "KeepAlive"
-      },
-      {
-        "name": "Database2",
-        "supabase_url": "https://your-supabase-url-2.supabase.co",
-        "supabase_key": "your-direct-supabase-key",  // Directly define the key
-        "table_name": "keep-alive"
-      }
-    ]
-    ```
+**The obvious fix that DOESN'T work:** A scheduled `curl` GET request (a read ping) against the REST API. We tried this first — four times a day — and Supabase paused the project anyway.
 
-    [See the section below for how to easily configure your database](#supabase-database-setup-)
-    
-    ### Environment Variables Explained
-    
-    In the `config.json` file, you can define either:
-    
-    - **Direct API Key**: Use the `"supabase_key"` field to directly specify your Supabase API key.
-    - **Environment Variable**: Use the `"supabase_key_env"` field to reference an environment variable where the key is stored. This is more secure, especially when running the script in different environments.
-    
-    #### Example:
-    
-    - `"supabase_key_env": "SUPABASE_KEY_1"`: This tells the script to look for an environment variable called `SUPABASE_KEY_1` that contains the actual API key.
-    - `"supabase_key": "your-direct-supabase-key"`: This directly provides the API key within the `config.json` file, which is less secure but simpler for local setups.
+**Why it fails:** Supabase tightened their definition of "activity" sometime in early-to-mid 2026. A read ping against the REST root, even an authenticated one, no longer reliably counts as activity. Other developers confirmed the same — successful pings that still resulted in pauses.
 
-4. Set up your environment variables _if you're using them_:
-    
-    Create a `.env` file and store variables there
-    
-    ```
-    SUPABASE_KEY_1="your-supabase-key-1"
-    SUPABASE_KEY_2="your-supabase-key-2"
-    ```
-    
-5. Run the script:
-    
-    ```bash
-    python main.py
-    ```
+**The fix that WORKS:** An actual database **WRITE**. Inserting a row into a dedicated table is undeniable database activity that Supabase cannot optimize away or filter as a health check. This is the heart of the pattern.
 
-## Deployment Options 🚀
+---
 
-### Option 1: GitHub Actions (Recommended - Serverless)
+## 2. The Tool We Forked
 
-The easiest way to deploy this project is using GitHub Actions, which runs completely serverless and free on GitHub's infrastructure.
+We forked an existing, battle-tested open-source tool rather than building from scratch.
 
-#### Steps:
+- **Upstream:** `travisvn/supabase-inactive-fix` (MIT license, ~118 stars, ~125 forks)
+- **Our fork:** `ahmedmusawir/stark-supabase-keep-alive-fix`
+- **What it does:** Inserts a random-named row into a `keepalive` table in each configured project, monitors the row count, and deletes old rows when the table exceeds a threshold (default 10). The INSERT is the activity that prevents the pause.
+- **How it runs:** Serverless via GitHub Actions on a cron schedule. No local machine, no server, no installation.
+- **Multi-project:** One `config.json` watches multiple databases. This is why it's a FLEET keepalive — add every free-tier project to the one config.
 
-1. **Fork this repository** to your GitHub account.
+**Why fork instead of clone:** GitHub Actions only run from YOUR repo. A local clone wouldn't run on a schedule. Forking puts the workflow in your GitHub account where Actions can fire it.
 
-2. **Create your `config.json`** file:
-   - Copy `config.example.json` to `config.json`
-   - Update with your Supabase project URLs and table names
-   - Use `supabase_key_env` (not `supabase_key`) to reference environment variables
+---
 
-   ```json
-   [
-     {
-       "name": "MyProject",
-       "supabase_url": "https://your-project-id.supabase.co",
-       "supabase_key_env": "SUPABASE_KEY_1",
-       "table_name": "keep-alive"
-     }
-   ]
-   ```
+## 3. The Complete Setup (Step By Step)
 
-3. **Commit and push your `config.json`** to your forked repository.
+### Step 1 — Fork The Tool
 
-4. **Set up GitHub Secrets and Variables**:
-   - Go to your forked repository on GitHub
-   - Navigate to **Settings** > **Secrets and variables** > **Actions**
+Fork `travisvn/supabase-inactive-fix` to your GitHub account. (Ours became `stark-supabase-keep-alive-fix`.)
 
-   **First, enable the workflow (Variables tab):**
-   - Click the **Variables** tab
-   - Click **New repository variable**
-   - Name: `ENABLE_GITHUB_ACTIONS`
-   - Value: `true`
+### Step 2 — Create The `keepalive` Table In Each Project
 
-   **Then, add your API keys (Secrets tab):**
-   - Click the **Secrets** tab
-   - Click **New repository secret**
-   - Add secrets for each database (matching the env var names in your `config.json`):
-     - Name: `SUPABASE_KEY_1`
-     - Value: Your Supabase API key
-   - Repeat for all your databases (`SUPABASE_KEY_2`, `SUPABASE_KEY_3`, etc.)
-
-5. **Enable GitHub Actions**:
-   - Go to the **Actions** tab in your forked repository
-   - Click "I understand my workflows, go ahead and enable them"
-
-6. **Test the workflow**:
-   - In the Actions tab, select "Supabase Keep-Alive"
-   - Click "Run workflow" to test it manually
-   - Check the logs to ensure everything works
-
-**That's it!** The workflow will automatically run every Monday and Thursday at midnight UTC, keeping your Supabase databases active.
-
-> **📝 Note for Existing Users:** If you're currently using a local cron job and pull this update, the GitHub Actions workflow will NOT run automatically. It only activates when you explicitly set the `ENABLE_GITHUB_ACTIONS` variable to `true`. You can:
-> - **Keep using your cron job**: Do nothing, the workflow stays disabled
-> - **Switch to GitHub Actions**: Follow the setup steps above and disable your cron job
-> - **Use both** (not recommended): Enable both, but adjust schedules to avoid conflicts
-
-#### Customizing the Schedule
-
-Edit `.github/workflows/keep-alive.yml` and modify the cron expression:
-
-```yaml
-schedule:
-  - cron: '0 0 * * 1,4'  # Currently: Monday and Thursday at midnight UTC
-```
-
-### Option 2: Local Cron Job
-
-If you prefer to run the script on your own machine or server, you can set up a cron job.
-
-1. Follow the initial setup steps 1-4 from the main [Setup](#setup-) section above.
-
-2. Set up a cron job (see [Cron Job Setup](#cron-job-setup-%EF%B8%8F) below for details).
-
-## Supabase Database Setup 🔧
-
-This project is predicated on accessing a `keep-alive` table in your Postgres database on Supabase. 
-
-### Sample SQL 
-
-Here's a SQL query for a `keep-alive` table 
+In EACH free-tier project's Supabase Dashboard → SQL Editor, run this exact SQL:
 
 ```sql
-CREATE TABLE "keep-alive" (
-  id BIGINT generated BY DEFAULT AS IDENTITY,
-  name text NULL DEFAULT '':: text,
-  random uuid NULL DEFAULT gen_random_uuid (),
-  CONSTRAINT "keep-alive_pkey" PRIMARY key (id)
+create table keepalive (
+  id bigint generated by default as identity primary key,
+  name text default '',
+  random uuid default gen_random_uuid()
 );
-
-INSERT INTO
-  "keep-alive"(name)
-VALUES
-  ('placeholder'),
-  ('example');
-```
-    
-
-## Cron Job Setup ⏱️
-
-To automate this script, you can create a cron job that runs the script periodically. Below are instructions for setting this up on macOS, Linux, and Windows.
-
-### macOS/Linux
-
-1. Open your crontab file for editing:
-    
-    ```bash
-    crontab -e
-    ```
-    
-2. Add a new cron job to run the script every Monday and Thursday at midnight:
-    
-    ```bash
-    0 0 * * 1,4 cd /path/to/your/project && /path/to/your/project/venv/bin/python main.py >> /path/to/your/project/logfile.log 2>&1
-    ```
-    
-
-This example cron job will:
-
-- Navigate to the project directory.
-- Run the Python script using the virtual environment.
-- Append the output to a logfile.
-
-For reference, here’s an example used in development:
-
-```bash
-0 0 * * 1,4 cd /Users/travis/Workspace/supabase-inactive-fix && /Users/travis/Workspace/supabase-inactive-fix/venv/bin/python main.py >> /Users/travis/Workspace/supabase-inactive-fix/logfile.log 2>&1
 ```
 
-### Windows (Task Scheduler)
+**Run the same SQL in every project you want kept alive.** The tables must be identical.
 
-Windows does not have cron jobs, but you can achieve similar functionality using Task Scheduler.
+### Step 3 — Build `config.json` In The Fork
 
-1. Open **Task Scheduler** and select **Create Basic Task**.
-    
-2. Name the task and set the trigger to run weekly.
-    
-3. Set the days (e.g., Monday and Thursday) and time (e.g., midnight) when the script should run.
-    
-4. In the **Action** step, select **Start a Program**, and point it to your Python executable within your virtual environment. For example:
-    
-    ```vbnet
-    C:\path\to\your\project\venv\Scripts\python.exe
-    ```
-    
-5. In the **Arguments** field, specify the path to the script:
-    
-    ```vbnet
-    C:\path\to\your\project\main.py
-    ```
-    
-6. Save the task. The script will now run automatically according to the schedule you specified.
-    
+Create `config.json` in the fork's root. One entry per project:
 
-## Contribution
+```json
+[
+  {
+    "name": "Project One Display Name",
+    "supabase_url": "https://PROJECT_ONE_REF.supabase.co",
+    "supabase_key_env": "SUPABASE_KEY_1",
+    "table_name": "keepalive"
+  },
+  {
+    "name": "Project Two Display Name",
+    "supabase_url": "https://PROJECT_TWO_REF.supabase.co",
+    "supabase_key_env": "SUPABASE_KEY_2",
+    "table_name": "keepalive"
+  }
+]
+```
 
-Feel free to open an issue or submit a pull request if you'd like to contribute to this project.
+- `name` — free-text label, used in logs only
+- `supabase_url` — from each project's Dashboard → Project Settings → Data API → Project URL. Keep the `https://`, no trailing slash, no path.
+- `supabase_key_env` — the NAME of the GitHub secret holding that project's key (NOT the key value itself)
+- `table_name` — `keepalive`, lowercase, identical to the SQL above
 
-## License
+Commit and push `config.json` to the fork.
 
-This project is licensed under the MIT License. See the `LICENSE` file for more details.
+### Step 4 — Set The GitHub Variable (The Master Switch)
+
+In the fork: **Settings → Secrets and variables → Actions → Variables tab → New repository variable**
+
+- Name: `ENABLE_GITHUB_ACTIONS`
+- Value: `true`
+
+**Without this, the workflow stays dormant and silently does nothing.** This is opt-in by design.
+
+### Step 5 — Set The GitHub Secrets (The Keys)
+
+In the fork: **Settings → Secrets and variables → Actions → Secrets tab → New repository secret** (once per project)
+
+- `SUPABASE_KEY_1` = the secret key from Project One
+- `SUPABASE_KEY_2` = the secret key from Project Two
+
+Get each key from that project's Dashboard → Project Settings → API Keys → **Secret keys** section (the `sb_secret_...` value).
+
+**CRITICAL — paste keys into GitHub Secrets ONLY. Never into a chat, never into the repo files, never into config.json.** The config references the key by env-var NAME; the actual value lives only in the encrypted secret.
+
+### Step 6 — Enable Actions On The Fork
+
+Forked repos have Actions OFF by default. Go to the repo's top-level **Actions tab** (not Settings → Actions). If you see a banner "workflows aren't being run on this forked repository," click **"I understand my workflows, go ahead and enable them."**
+
+### Step 7 — Enable The Specific Workflow
+
+Even after Actions are globally enabled, the scheduled workflow may show as **"Disabled"** in the Actions sidebar (another fork safety default). Click the workflow name, then click **"Enable workflow."** Now the "Run workflow" button appears.
+
+### Step 8 — Manual Test Run
+
+In the Actions tab → select the keepalive workflow → **Run workflow** → leave branch as `main` → confirm. Watch the run go green.
+
+### Step 9 — Verify By The Database (NOT By The Green Check)
+
+A green checkmark only means the script didn't crash. **Prove the write happened.** In each project's SQL Editor:
+
+```sql
+select count(*) as rows, max(id) as last_id from keepalive;
+```
+
+Since the table started empty (no seed rows), after one successful run each project should show **`rows = 1`**. That 0-to-1 jump is unambiguous proof the insert worked. (Confirmed on both our projects.)
+
+---
+
+## 4. The Schedule
+
+Default cron: `0 0 * * 1,4` — **Monday and Thursday at midnight UTC.** Twice a week, maximum 4-day gap, comfortably inside the 7-day pause window.
+
+To change frequency, edit the cron expression in `.github/workflows/` (the keepalive workflow file):
+- `0 0 */3 * *` — every 3 days
+- `0 0 * * *` — every day
+
+Monday/Thursday is the proven default. Don't over-engineer it.
+
+---
+
+## 5. The Four Traps We Hit (So You Don't)
+
+These are the exact footguns from our build. Each one cost us time. Now they're documented.
+
+| Trap | Symptom | Fix |
+|---|---|---|
+| **Read ping instead of write** | Ping succeeds, project pauses anyway | Use the INSERT-based tool, not a curl GET |
+| **Table name mismatch** | Workflow runs green but no row appears | Use `keepalive` (lowercase, no hyphen, no caps) IDENTICALLY in both SQL and config — Postgres folds unquoted names to lowercase, so `KeepAlive` or `keep-alive` need quotes everywhere and silently mismatch |
+| **Wrong key / publishable key** | Insert fails with auth/permission error | Use the `sb_secret_` key (full privilege, bypasses RLS), not the publishable key. RLS doesn't block the secret key, so no policy work needed on the keepalive table |
+| **Fork disables workflows** | "0 workflow runs," no Run button | Two separate switches: enable Actions globally (top Actions tab banner) AND enable the specific scheduled workflow (it shows "Disabled" until you click into it and enable) |
+
+Plus the master-switch trap: **`ENABLE_GITHUB_ACTIONS=true` is a Variable, not a Secret, and without it nothing runs.**
+
+---
+
+## 6. Key/Project Pairing Discipline
+
+Each numbered slot must keep URL and key pointing at the SAME project:
+
+- `SUPABASE_KEY_1` secret ↔ Project One's `supabase_url` in config ↔ Project One's `sb_secret_` key
+- `SUPABASE_KEY_2` secret ↔ Project Two's `supabase_url` in config ↔ Project Two's `sb_secret_` key
+
+If URL and key cross projects, the workflow tries to insert into the wrong database with the wrong key and fails. **Verify pairing before the test run.**
+
+(In our build: Stark_Base_Free → ref `jmzwhgnyunwssamrqyhp` → KEY_1; Nextjs Starter v1 → ref `ihgcsrypblqkwommrkgj` → KEY_2.)
+
+---
+
+## 7. Adding A New Project To The Fleet Later
+
+This is the payoff of the fleet pattern. To keep a NEW free-tier project alive:
+
+1. Run the `keepalive` table SQL (Step 2) in the new project
+2. Add a new entry to `config.json` with the next env-var name (e.g., `SUPABASE_KEY_3`) — the tool supports `SUPABASE_KEY_1` through `SUPABASE_KEY_5` out of the box without editing the workflow
+3. Add the new `SUPABASE_KEY_3` secret in GitHub with the new project's `sb_secret_` key
+4. Commit, push, manual-test, verify 0→1
+
+No new infrastructure. The existing fork and schedule absorb the new project.
+
+---
+
+## 8. Validation Discipline
+
+The manual run proves the MECHANISM. The real proof is PASSIVE — let the cron fire on its own for a week and confirm no project pauses. Trust-but-verify: don't assume it's working until a full 7-day window passes without a pause.
+
+Also worth adding (we flagged but didn't build): a failure notification. GitHub emails on workflow failure by default — confirm that's on for your account, or add a Slack webhook step, so you hear within hours if a run ever fails.
+
+---
+
+## 9. When You Do NOT Need This
+
+- **Paid-tier projects don't pause.** Only free-tier projects need keepalive. (Our Cyber Pharma and StarkReads paid projects are exempt; only the two free sandboxes needed it.)
+- **Throwaway projects you don't care about** — if a pause costs you nothing, skip it.
+
+---
+
+## 10. Why This Is A Factory Artifact
+
+Every Cyberize project that uses a free-tier Supabase sandbox needs this. Instead of re-deriving the read-vs-write lesson and the fork traps every time, you fork once, maintain one config, and add each new free project as a one-line entry. **The pattern compounds — the fleet grows, the setup cost stays near zero.**
+
+---
+
+## Version History
+
+| Version | Date | Changes |
+|---|---|---|
+| 1.0 | 2026-06-03 | Initial documentation. Captured from the live build proven on two free-tier projects. Documents the read-vs-write discovery, the fork-vs-clone reasoning, the four traps, the key/project pairing discipline, and the fleet-expansion workflow. Born from the mistake of building it without documenting it. |
+
+---
+
+🥄 *Part of Stark Industries — App Factory. Real artifacts, born of real need — including the need created by forgetting to write the last one down.*
